@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DR Plan Review and Automation</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div>
+        <div class="eyebrow">Boeing ERPS</div>
+        <h1>DR Plan Review and Automation</h1>
+      </div>
+      <div class="header-actions">
+        <span class="version-label">Checkpoint catalog: 2.6.1 version</span>
+        <span id="sessionBadge" class="badge neutral">Session unknown</span>
+        <button id="refreshPlansBtn" class="icon-btn" type="button" title="Refresh DR Plans" aria-label="Refresh DR Plans">↻</button>
+      </div>
+    </header>
+
+    <section class="card prerequisites-card" aria-labelledby="sessionHeading">
+      <div class="card-title-row">
+        <span id="sessionHeading">Prerequisites</span>
+        <div class="prereq-actions">
+          <div class="tooltip-wrap">
+            <button class="icon-btn small-icon-btn" type="button" aria-label="Prerequisite instructions">?</button>
+            <div class="tooltip-panel" role="tooltip">
+              <strong>Before validating</strong>
+              <p>Open ERPS in this browser profile and complete Boeing sign-in. The extension reuses that authenticated session.</p>
+              <ol>
+                <li>Open ERPS and complete sign-in.</li>
+                <li>Return here and select Check Session.</li>
+                <li>Green means the ERPS form API is reachable.</li>
+              </ol>
+            </div>
+          </div>
+          <button id="checkSessionBtn" type="button" class="btn-secondary">Check Session</button>
+        </div>
+      </div>
+      <div class="prereq-summary" id="sessionMessage" role="status">Open ERPS and sign in before loading plans.</div>
+      <div class="prereq-list">
+        <div class="prereq-item">
+          <span id="sessionSignal" class="signal signal-unknown" aria-hidden="true"></span>
+          <div class="prereq-copy">
+            <span>ERPS</span>
+            <small>Authenticated session required</small>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="planHeading">
+      <div class="card-title" id="planHeading">DR Plan Explorer</div>
+      <form id="searchForm" class="search-row">
+        <label class="sr-only" for="planSearch">Plan search</label>
+        <input id="planSearch" class="input" type="search" maxlength="120" placeholder="Search DR Plans by name or ID">
+        <button type="submit" class="btn-secondary">Search</button>
+      </form>
+      <p id="planCount" class="muted"></p>
+    </section>
+
+    <section class="card" aria-labelledby="plansTitle">
+      <div class="card-title-row">
+        <span id="plansTitle">DR Plans</span>
+        <span class="badge">Select one</span>
+      </div>
+      <div id="planList" class="assessment-list" role="radiogroup" aria-label="DR Plans"></div>
+    </section>
+
+    <section class="card run-card">
+      <button id="validateBtn" type="button" class="btn-primary validate-action-btn" disabled>Load and Validate Selected Plan</button>
+    </section>
+
+    <section id="resultsSection" class="card hidden" aria-labelledby="resultsHeading">
+      <div class="card-title-row">
+        <div>
+          <span id="resultsHeading">Validation Results</span>
+          <div class="asset-sub" id="selectedPlanLabel"></div>
+        </div>
+        <button id="rerunBtn" type="button" class="btn-secondary">Run Again</button>
+      </div>
+      <div id="summary" class="summary-grid" aria-label="Validation summary"></div>
+      <div class="result-tabs" role="group" aria-label="Filter checkpoints">
+        <button type="button" class="tab-btn filter active" data-filter="ALL">All</button>
+        <button type="button" class="tab-btn filter" data-filter="FAIL">Fail</button>
+        <button type="button" class="tab-btn filter" data-filter="REVIEW">Review</button>
+        <button type="button" class="tab-btn filter" data-filter="PASS">Pass</button>
+        <button type="button" class="tab-btn filter" data-filter="NA">N/A</button>
+      </div>
+      <div id="resultList" class="results-container result-list"></div>
+    </section>
+
+    <section id="automationSection" class="card hidden" aria-labelledby="automationHeading">
+      <div class="card-title-row">
+        <div>
+          <span id="automationHeading">Post-Approval Automation</span>
+          <div class="asset-sub">Required records are selected; optional records need an explicit choice.</div>
+        </div>
+      </div>
+      <label class="field-label" for="validationDate">
+        <span>Validation Date</span>
+        <input id="validationDate" class="input" type="date">
+      </label>
+      <div id="automationList" class="automation-list"></div>
+      <div class="warning-panel">
+        <strong>Write boundary</strong>
+        <p>After confirmation, selected dates are synchronized to the IT Plan header before Test and Exercise Summary records are created. Identical records are skipped.</p>
+      </div>
+      <button id="createBtn" type="button" class="btn-danger create-action-btn">Review and Create Selected Records</button>
+      <p id="createMessage" class="message" role="status"></p>
+    </section>
+  </div>
+
+  <div id="busyOverlay" class="busy hidden" role="status" aria-live="polite">
+    <div class="spinner" aria-hidden="true"></div>
+    <p id="busyMessage">Working…</p>
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

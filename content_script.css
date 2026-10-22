@@ -1,0 +1,44 @@
+.drpa-post-action {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 6px !important;
+  padding: 8px 12px !important;
+  border: 1px solid #5678d4 !important;
+  border-radius: 8px !important;
+  background: #7c9cff !important;
+  box-shadow: 0 2px 7px rgba(31, 41, 55, .16) !important;
+  color: #fff !important;
+  cursor: pointer !important;
+  font: 600 13px/1.2 "Segoe UI", Arial, sans-serif !important;
+  text-decoration: none !important;
+  vertical-align: middle !important;
+}
+
+.drpa-post-action:hover,
+.drpa-post-action:focus {
+  background: #6f8fff !important;
+  color: #fff !important;
+  outline: 2px solid rgba(124, 156, 255, .35) !important;
+  outline-offset: 2px !important;
+}
+
+.drpa-post-action:disabled {
+  cursor: wait !important;
+  opacity: .72 !important;
+}
+
+.drpa-post-action__icon {
+  font-size: 15px !important;
+  line-height: 1 !important;
+}
+
+.drpa-post-action__count {
+  min-width: 20px !important;
+  padding: 2px 6px !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, .24) !important;
+  color: #fff !important;
+  font-size: 11px !important;
+  text-align: center !important;
+}

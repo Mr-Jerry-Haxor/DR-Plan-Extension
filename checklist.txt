@@ -1,0 +1,172 @@
+	DISASTER RECOVERY PLAN (DR Plan) Checklist
+
+
+
+	ERPS section - Plan Approval
+ERPS1	
+Checkpoint:  Does the table Top, Drill, Orientation and or Functional Test dates match the dates in the Recovery Plan Validation(s) tab?
+
+ERPS2	
+"Checkpoint:  Has the plan revision letter in ERPS been incremented?
+Note:  The DR Plan revision letter in the previously approved DR plan must  be superseded by the next letter of the alphabet in the latest approved DR Plan."
+
+ERPS3	
+"Checkpoint:  Has the revision description been documented for the current revision?
+Note:  The revision description must describe changes to the DR Plan since the previously approve DR Plan."
+	
+    
+    ERPS section - Plan Overview
+
+ERPS4	
+"Organization
+Checkpoint: Does the Organization in the Plan Overview section match the maintaining organization in ESATS for at least one of the applications in the DR plan? "
+
+ERPS5	
+"Plan Owner
+Checkpoint:  Does the Plan Owner match the Plan Approver in the Plan Overview section of the DR Plan? "
+
+ERPS6	
+"Purpose
+Checkpoint:  Does the purpose of the recovery plan include the name of the application(s) and the corresponding data center(s)? 
+Notes:
+ • SaaS, Cloud, etc plans will need to include a region or state for datacenter location
+ • The purpose must include the name of all the applications the DR plan supports.
+ • If on BEN, the purpose must include the data center location (found in GSEP)
+ • If SaaS or Cloud, the purpose must include a geographical region or state must be identified"
+
+ERPS7	
+"Scope
+Checkpoint:  Does the scope include the name of the application(s), the name of the corresponding data center(s), a list of what is included in the plan, and a list of what is excluded from the plan? 
+Notes:
+• SaaS, Cloud, etc plans will need to include a region or state for datacenter location.
+• If on BEN, the name of the corresponding data center.
+• If SaaS or Cloud, a geographical region or state must be listed."
+
+ERPS8	
+"Assumptions 
+Checkpoint:   Is there at least 1 assumption identified and are the assumptions consistent with the tasks and procedures?
+Notes: 
+• The assumptions listed must not conflict with the tasks and procedures.
+• REMT should not be listed as an assumption as of 2018."
+
+ERPS9	
+"Recovery Strategies
+Checkpoint:  Is the strategy consistent with the Scope?"
+
+ERPS10	
+"Recovery Strategies
+Checkpoint:  Does the documented plan strategy correspond with the strategy selected in the application details in the Component Recovery tab?
+Notes:  The recovery strategy must:
+• not conflict with details in the Component Recovery tab.
+• not conflict with the recovery tasks.
+• not deviate from the scope of the plan."
+
+ERPS11	
+"Recovery Strategies
+Checkpoint:  ERP must not be blank (can be zero) and the ERP must be non-zero if data is being recovered as reported in the Recovery Strategies."
+
+ERPS12	
+"Activation Criteria 
+Checkpoint:  Does the activation criteria include the name of the application and the appropriate data center?"
+
+ERPS13	
+"Activation Procedure
+Checkpoint:  Does the activation procedure include contacting the Recovery Team and or Initial Call List?
+Note: 
+• The activation procedure must include who contacts the recovery team.
+• If ITOC and MIM are referenced they must also be referenced in the tasks and procedures as this would be part of the recovery process."
+	
+    
+    ERPS section - Component Recovery
+ERPS14	
+Checkpoint:  If the DR Plan is an Application plan, are the IT service, Databases, Hardware, and Servers under the Component Recovery section empty? 
+
+ERPS15	
+"Checkpoint: Does the ETTR match the total time of the tasks in the General Recovery Tasks or Linked Recovery Tasks section?
+Note:  The ETTR listed in the Component Recovery must be equal to the cumulative time of the tasks in the General Recovery Tasks or Linked Recovery Tasks section of the DR Plan."
+	
+    
+    ERPS section - Application Component
+
+ERPS16	
+"Linked Servers Tab
+Checkpoint:  Were all of the servers checked in the plan active in GSEP when the plan was approved and were all active servers in GSEP related/associated to the plan's applications listed?"
+
+ERPS17	
+"Linked Databases Tab
+Checkpoint:  Were all of the databases checked plan active in GSEP when the plan was approved?"
+
+ERPS18	
+"Linked Applications Tab
+Checkpoint:  Were all of the applications checked in the plan active in ESATS when the plan was approved?
+Note:  There shouldn't be any blank fields in linked applications section."
+	
+    
+    ERPS section - Recovery Teams
+
+ERPS19	
+"ITP Recovery Team Members
+Checkpoint: Is there a Recovery team leader identified and at least one recovery team member or Team lead backup identified?"
+
+ERPS20	
+"ITP Recovery Team Members
+Checkpoint: Are all members of the Recovery Team limited to 1 position/role?
+Note: 
+• There can only be one person listed as the Team Lead.
+• If listed, there can only be one person listed as the Team Lead Backup
+• Each person can only be in 1 role/position. Example the Team Lead cannot be selected in the team members section"
+
+ERPS21	
+"Team Contact Lists Assigned Tab
+Checkpoint: Were all named employees in the plan active employees when the plan was approved?"
+	
+    
+    ERPS section - General Recovery Tasks
+
+ERPS22	
+Checkpoint:  Do the General Recovery Tasks start with the 0 hour (start of the disaster or event) and do they end with the recovery of the application/system or tool?
+
+ERPS23	
+Checkpoint:  Is the math between the General Recovery Tasks correct?
+
+ERPS24	
+Checkpoint:  Is there a task for assembling the Recovery Team?
+
+ERPS25	
+"Checkpoint:  If ITOC and/or MIM are mentioned in the activation procedure, is there a task created specifically mentioning ITOC and/or MIM? 
+Note: Select N/A if ITOC and/or MIM are not in the activation procedure."
+
+ERPS26	
+"Recovery Strategies  
+Checkpoint:  Is the strategy consistent with the tasks?
+Note:  The recovery strategy should not conflict with the recovery tasks.  (Example: if the recovery strategy is automatic failover the recovery tasks cannot have ""recover on replacement equipment"" listed.)"
+	
+    
+    ERPS section - Documents
+
+ERPS27	
+"ITP Non Printable Documents
+Checkpoint:  If there were certification findings prior to the approved plan, have they been addressed in the approved plan?"
+	
+    
+    ERPS section - Recovery Plan Validation(s)
+
+ERPS28	
+"Test and Exercise Summary
+Checkpoint:  Is there a completed Orientation exercise with text stating what occurred during the exercise for every application in the plan?  "
+
+ERPS29	
+"Test and Exercise Summary
+Checkpoint:  Is there a completed Table top exercise with text stating what occurred during the exercise for every application in the plan?   (Select N/A if all applications in the DR Plan are RL4 or RL5)"
+
+ERPS30	
+"Test and Exercise Summary
+Checkpoint:  Is there a completed Drill exercise with text stating what occurred during the exercise for every application in the plan?  (Select N/A if all applications in the DR Plan are RL4 or RL5)"
+
+ERPS31	
+"Test and Exercise Summary
+Checkpoint:  Is there a completed and up to date Functional exercise with text stating what occurred during the exercise for every application in the plan? (Select N/A if all applications in the DR Plan are not RL4 or RL5 or if the functional exercise is not up to date.)"
+
+ERPS32	
+"Test and Exercise Summary
+Checkpoint:  Do participants in the orientation exercise validation match the participants in the Recovery Team?"

@@ -7,32 +7,29 @@ import {
 } from "./data.js";
 
 export const PROCESS_MATRIX = Object.freeze({
-  1: { orientation: "required", tabletop: "required", drill: "optional", functional: "not-required" },
-  2: { orientation: "required", tabletop: "required", drill: "required", functional: "not-required" },
-  3: { orientation: "twice-yearly", tabletop: "required", drill: "required", functional: "not-required" },
-  4: { orientation: "twice-yearly", tabletop: "not-required", drill: "optional", functional: "required" },
-  5: { orientation: "twice-yearly", tabletop: "not-required", drill: "optional", functional: "required" }
+  1: { orientation: "required", tabletop: "required", drill: "optional" },
+  2: { orientation: "required", tabletop: "required", drill: "required" },
+  3: { orientation: "twice-yearly", tabletop: "required", drill: "required" },
+  4: { orientation: "twice-yearly", tabletop: "not-required", drill: "optional" },
+  5: { orientation: "twice-yearly", tabletop: "not-required", drill: "optional" }
 });
 
 export const VALIDATION_TYPES = Object.freeze({
   orientation: "Orientation Validation",
   tabletop: "Table Top Validation",
-  drill: "Drill Validation",
-  functional: "Functional Test Validation"
+  drill: "Drill Validation"
 });
 
 export const PLAN_DATE_FIELDS = Object.freeze({
   orientation: "OrientationDate8341",
   tabletop: "TableTopExerciseDate8336",
-  drill: "DrillDate8337",
-  functional: "FunctionalExerciseDate8338"
+  drill: "DrillDate8337"
 });
 
 const DESCRIPTIONS = Object.freeze({
   orientation: "Orientation email sent to recovery team participants listed in the DR plan to save the plan in local desktop for future reference.",
   tabletop: "All members of the recovery team are familiar with the documented recovery tasks and also verified that these tasks can be executed as outlined and will lead to the successful recovery of the asset.",
-  drill: "During the review, the recovery team examined the recovery team list, plan strategy, and activation criteria. At this time, no issues have been identified.",
-  functional: "The recovery team completed a functional recovery exercise and verified the documented recovery procedure for the application."
+  drill: "During the review, the recovery team examined the recovery team list, plan strategy, and activation criteria. At this time, no issues have been identified."
 });
 
 function isoToErpsDate(value) {

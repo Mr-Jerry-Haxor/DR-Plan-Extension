@@ -6,13 +6,12 @@
   const ERPS_HOME = "https://boeing.continuitylogic.com/";
   const VERSION = 1;
   const MAX_MESSAGE_BYTES = 100_000;
-  const MAX_PLANS = 2_000;
+  const MAX_PLANS = 10_000;
   const PAGE_SIZE = 100;
   const PLAN_DATE_FIELDS = {
     "Orientation Validation": "OrientationDate8341",
     "Table Top Validation": "TableTopExerciseDate8336",
-    "Drill Validation": "DrillDate8337",
-    "Functional Test Validation": "FunctionalExerciseDate8338"
+    "Drill Validation": "DrillDate8337"
   };
 
   const CHILD_COLUMNS = {
@@ -438,17 +437,124 @@
     const kind = {
       "Orientation Validation": "orientation",
       "Table Top Validation": "tabletop",
-      "Drill Validation": "drill",
-      "Functional Test Validation": "functional"
+      "Drill Validation": "drill"
     }[type];
     const matrix = {
-      1: { orientation: "required", tabletop: "required", drill: "optional", functional: "not-required" },
-      2: { orientation: "required", tabletop: "required", drill: "required", functional: "not-required" },
-      3: { orientation: "twice-yearly", tabletop: "required", drill: "required", functional: "not-required" },
-      4: { orientation: "twice-yearly", tabletop: "not-required", drill: "optional", functional: "required" },
-      5: { orientation: "twice-yearly", tabletop: "not-required", drill: "optional", functional: "required" }
+      1: { orientation: "required", tabletop: "required", drill: "optional" },
+      2: { orientation: "required", tabletop: "required", drill: "required" },
+      3: { orientation: "twice-yearly", tabletop: "required", drill: "required" },
+      4: { orientation: "twice-yearly", tabletop: "not-required", drill: "optional" },
+      5: { orientation: "twice-yearly", tabletop: "not-required", drill: "optional" }
     };
     return matrix[level]?.[kind] || null;
+  }
+
+  function isErpsPageSender(sender) {
+    try {
+      return new URL(sender?.tab?.url || "").origin === new URL(ERPS_HOME).origin;
+    } catch {
+      return false;
+    }
+  }
+
+  async function postApprovalStatus(planId) {
+    const context = await loadPlan(planId);
+    const approved = clean(context.plan.PlanApprovalStatus8334).toLowerCase() === "approved";
+    const approvalDate = canonicalErpsDate(context.plan.PlanApprovalDate8330);
+    const eligible = approved && Boolean(approvalDate) && context.applicationComponents.length > 0;
+    const missing = [];
+    if (eligible) {
+      const requiredTypes = new Set();
+      for (const component of context.applicationComponents) {
+        for (const type of Object.keys(PLAN_DATE_FIELDS)) {
+          const requirement = requirementFor(componentRecoveryLevel(component), type);
+          if (requirement !== "required" && requirement !== "twice-yearly") continue;
+          requiredTypes.add(type);
+          const exists = context.validations.some(row =>
+            String(row.ApplicationTestedExercised9582) === String(component.Id) &&
+            clean(row.TestExerciseType9526) === type &&
+            canonicalErpsDate(row.TestExerciseDate9527) === approvalDate &&
+            clean(row.TestScenarioDescription9534).length >= 10
+          );
+          if (!exists) missing.push(`${clean(component.PlanName8555) || `Application ${component.Id}`}: ${type}`);
+        }
+      }
+      for (const type of requiredTypes) {
+        const fieldName = PLAN_DATE_FIELDS[type];
+        if (canonicalErpsDate(context.plan[fieldName]) !== approvalDate) {
+          missing.push(`IT Plan header: ${type}`);
+        }
+      }
+    }
+    return {
+      planId: Number(context.plan.Id),
+      planName: clean(context.plan.PlanName7870),
+      approvalDate,
+      approved,
+      eligible,
+      completed: eligible && missing.length === 0,
+      missing: [...new Set(missing)]
+    };
+  }
+
+  async function notifyPostApprovalStatusChanged(planId, sourceTabId) {
+    try {
+      let tabId = Number(sourceTabId);
+      if (!Number.isSafeInteger(tabId) || tabId <= 0) {
+        const stored = await extensionApi.storage.local.get("postProcessSourceTabId");
+        tabId = Number(stored?.postProcessSourceTabId);
+      }
+      if (Number.isSafeInteger(tabId) && tabId > 0 && extensionApi.tabs?.sendMessage) {
+        await extensionApi.tabs.sendMessage(tabId, { type: "POST_APPROVAL_STATUS_CHANGED", planId });
+      }
+    } catch {
+      // The originating ERPS tab may have closed; no further action is required.
+    }
+  }
+
+  async function captureWorkflowInitiator(payload, sender) {
+    if (!isErpsPageSender(sender)) throw new Error("Workflow initiator can be captured only from ERPS.");
+    const userId = clean(payload?.userId).slice(0, 40);
+    const displayName = clean(payload?.displayName).slice(0, 120);
+    if (userId && !/^[A-Za-z0-9._-]+$/.test(userId)) throw new Error("ERPS user identifier is invalid.");
+    let verifiedUser = null;
+    if (userId) {
+      const url = new URL(`${FORM_API}/User/GetUser`);
+      url.searchParams.set("UserName", userId);
+      try { verifiedUser = await fetchErps(url.toString()); } catch { verifiedUser = null; }
+    }
+    const verifiedId = clean(verifiedUser?.UserName || verifiedUser?.EmployeeId || userId).slice(0, 40);
+    const verifiedName = clean(verifiedUser?.FullNameFirstLast || displayName).slice(0, 120);
+    const initiator = {
+      userId: verifiedId || "Unavailable",
+      displayName: verifiedName || "Unavailable",
+      verifiedByErps: Boolean(verifiedUser),
+      capturedAt: new Date().toISOString()
+    };
+    await extensionApi.storage.local.set({ workflowInitiator: initiator });
+    return initiator;
+  }
+
+  async function recordWorkflowAudit(planId, outcome) {
+    const stored = await extensionApi.storage.local.get(["workflowInitiator", "workflowAudit"]);
+    const initiator = stored.workflowInitiator || {
+      userId: "Unavailable",
+      displayName: "Unavailable",
+      capturedAt: new Date().toISOString()
+    };
+    const audit = Array.isArray(stored.workflowAudit) ? stored.workflowAudit.slice(-99) : [];
+    const event = {
+      planId: Number(planId),
+      planName: clean(outcome.planName),
+      initiatedBy: initiator,
+      completedAt: new Date().toISOString(),
+      createdCount: outcome.created.length,
+      skippedCount: outcome.skipped.length,
+      headerUpdated: Boolean(outcome.headerUpdate?.changed)
+    };
+    audit.push(event);
+    await extensionApi.storage.local.set({ workflowAudit: audit, lastWorkflowAudit: event });
+    return event;
   }
 
   function validationStrategy(value) {
@@ -570,7 +676,7 @@
       const type = clean(item.type);
       const date = clean(item.date);
       const description = clean(item.description);
-      if (!["Orientation Validation", "Table Top Validation", "Drill Validation", "Functional Test Validation"].includes(type)) throw new Error("Unsupported validation type.");
+      if (!["Orientation Validation", "Table Top Validation", "Drill Validation"].includes(type)) throw new Error("Unsupported validation type.");
       const requirement = requirementFor(componentRecoveryLevel(component), type);
       if (!requirement || requirement === "not-required") throw new Error(`${type} is not applicable to this application's recovery level.`);
       if (!validErpsDate(date)) throw new Error("Validation date must be a valid MM/DD/YYYY date.");
@@ -643,10 +749,10 @@
       error.details = { created, skipped, headerUpdate: headerUpdate || null };
       throw error;
     }
-    return { created, skipped, headerUpdate };
+    return { created, skipped, headerUpdate, planName: clean(context.plan.PlanName7870) };
   }
 
-  async function handle(message) {
+  async function handle(message, sender) {
     if (!message || message.version !== VERSION || typeof message.type !== "string" || typeof message.requestId !== "string") {
       throw new Error("Invalid extension message.");
     }
@@ -660,8 +766,21 @@
         return listPlans(payload.search);
       case "LOAD_PLAN":
         return loadPlan(payload.planId);
-      case "CREATE_VALIDATIONS":
-        return createValidations(payload.planId, payload.items);
+      case "GET_POST_APPROVAL_STATUS":
+        if (!isErpsPageSender(sender)) throw new Error("Post-approval status can be requested only from ERPS.");
+        return postApprovalStatus(payload.planId);
+      case "CAPTURE_WORKFLOW_INITIATOR":
+        return captureWorkflowInitiator(payload, sender);
+      case "GET_WORKFLOW_INITIATOR": {
+        const stored = await extensionApi.storage.local.get("workflowInitiator");
+        return stored.workflowInitiator || null;
+      }
+      case "CREATE_VALIDATIONS": {
+        const created = await createValidations(payload.planId, payload.items);
+        await notifyPostApprovalStatusChanged(payload.planId, sender?.tab?.id);
+        const audit = await recordWorkflowAudit(payload.planId, created);
+        return { ...created, workflowAudit: audit };
+      }
       default:
         throw new Error("Unsupported extension message type.");
     }
@@ -675,7 +794,7 @@
       sendResponse({ ok: false, error: { code: "MESSAGE_TOO_LARGE", message: "Request is too large." } });
       return false;
     }
-    Promise.resolve(handle(message))
+    Promise.resolve(handle(message, sender))
       .then(data => sendResponse({ ok: true, data }))
       .catch(error => sendResponse({
         ok: false,

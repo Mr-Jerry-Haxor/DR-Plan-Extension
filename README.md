@@ -1,14 +1,14 @@
 # DR Plan Review and Automation
 
 Cross-browser WebExtension for reviewing ERPS Disaster Recovery plans against
-the 32 checkpoints in `checklist.txt` and preparing post-approval Test and
+the 32 checkpoints in `research data/checklist.txt` and preparing post-approval Test and
 Exercise Summary records.
 
 ## Browser packages
 
 One source tree generates two Manifest V3 packages:
 
-- `dist/chromium` — Chrome 114+ and Chromium-based Microsoft Edge.
+- `dist/chromium` — Chrome 116+ and Chromium-based Microsoft Edge.
 - `dist/firefox` — Firefox 142+, using Firefox's event-page and sidebar keys.
 
 Run:
@@ -27,11 +27,11 @@ the toolbar icon opens the persistent side panel by default. Load
 sidebar at install and the toolbar icon toggles it afterward. There is no
 toolbar popup in either browser package.
 
-`npm run package` creates:
+`npm run package` creates all exported packages directly under `dist/`:
 
-- `artifacts/dr-plan-review-chromium-<version>.zip`
-- `artifacts/dr-plan-review-firefox-<version>.zip`
-- `artifacts/dr-plan-review-firefox-<version>-unsigned.xpi`
+- `dist/dr-plan-review-chromium-<version>.zip`
+- `dist/dr-plan-review-firefox-<version>.zip`
+- `dist/dr-plan-review-firefox-<version>-unsigned.xpi`
 
 The unsigned XPI is suitable for validation and Firefox Developer Edition,
 Nightly, or controlled enterprise environments where signature enforcement is
@@ -43,18 +43,27 @@ read from the environment and are never stored in the repository.
 ## Workflow
 
 1. Sign in to ERPS in the same browser profile.
-2. Open the extension and select **Check session**.
-3. Search or refresh the DR Plan list, select one plan, then choose
+2. Select **DR Plugin** from the ERPS left sidebar. The complete extension UI
+   replaces the ERPS main content workspace instead of opening the browser side
+   pane. This always opens the all-plan dashboard, regardless of which plan was
+   previously open.
+3. Open an ERPS IT Plan. When the plan is Approved and required post-approval
+   records or header dates are missing, ERPS displays **Complete Post-DR
+   Process** in the plan header. Selecting it opens the embedded DR Plugin and
+   loads that plan automatically.
+4. Alternatively, open the extension from the toolbar and select **Check
+   session**.
+5. Search or refresh the DR Plan list, select one plan, then choose
    **Load and validate**.
-4. Review PASS, FAIL, REVIEW, and N/A findings. REVIEW means that the HAR-backed
+6. Review PASS, FAIL, REVIEW, and N/A findings. REVIEW means that the HAR-backed
    ERPS evidence is insufficient, commonly because historical GSEP or ESATS
    evidence is required.
-5. In **Post-approval automation**, review the records suggested by recovery
+7. In **Post-approval automation**, review the records suggested by recovery
    level. Required records are preselected; optional records are not.
-6. Confirm the exact records. The extension synchronizes the corresponding
-   Orientation, Tabletop, Drill, or Functional date fields on the parent IT
+8. Confirm the exact records. The extension synchronizes the corresponding
+   Orientation, Tabletop, or Drill date fields on the parent IT
    Plan, then creates the selected Test and Exercise Summary records.
-7. The extension never updates ERPS as a side effect of running validation.
+9. The extension never updates ERPS as a side effect of running validation.
    Writes begin only after the confirmation dialog.
 
 The post-approval date defaults to the ERPS Plan Approval Date. Every create is
@@ -62,14 +71,34 @@ checked against the recovery-level matrix, and an existing record with the same
 application, validation type, and date is skipped. This makes a retry safe after
 a partial network failure: already confirmed records are not recreated.
 
+The embedded dashboard loads every accessible DR Plan through paginated ERPS
+requests. Search, status, organization, and approval-date filters work locally
+without discarding selections. Multiple filtered plans can be selected and
+validated together. Each plan shows its ERPS status and the most recently
+captured plugin workflow initiator.
+
 ## Safety and data handling
 
 The extension uses the existing ERPS browser session with
 `credentials: "include"`. It does not request cookie access, read authorization
-headers, inject scripts into pages, or persist full plan data. The latest
-sanitized validation result and UI preferences are stored locally. Creation
-requests are not automatically retried, preventing duplicate records after an
-ambiguous network failure.
+headers, execute code in the ERPS page's main JavaScript world, or persist full
+plan data. A narrowly scoped isolated content script adds only the conditional
+Post-DR action, the permanent DR Plugin sidebar entry, and the embedded main
+workspace. The latest sanitized validation result, UI preferences, and a
+bounded local audit of the ERPS-verified workflow initiator are stored locally.
+The audit keeps at most 100 events and excludes email, phone, authorization,
+and cookie data. Creation requests are not automatically retried, preventing
+duplicate records after an ambiguous network failure.
+
+## Modular checkpoint architecture
+
+- `checkpoints/ERPS1.js` through `checkpoints/ERPS32.js` own individual
+  checkpoint rules.
+- `checkpoints/shared.js` contains deterministic normalization and evidence
+  helpers.
+- `checkpoints/index.js` is the ordered checkpoint registry.
+- `core/validation.js` only orchestrates modules and calculates the result
+  summary.
 
 ## Verification boundary
 

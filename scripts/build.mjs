@@ -33,6 +33,12 @@ const common = {
       run_at: "document_idle"
     }
   ],
+  web_accessible_resources: [
+    {
+      resources: ["popup.html"],
+      matches: ["https://boeing.continuitylogic.com/*"]
+    }
+  ],
   content_security_policy: {
     extension_pages: "script-src 'self'; object-src 'self'"
   }
@@ -71,7 +77,8 @@ const shipped = [
   "service_worker.js",
   "content_script.js",
   "content_script.css",
-  "core"
+  "core",
+  "checkpoints"
 ];
 
 const resolvedDist = path.resolve(dist);

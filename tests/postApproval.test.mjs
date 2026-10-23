@@ -5,7 +5,6 @@ import {
   defaultPostApprovalDate,
   matrixForLevel,
   planDateUpdates,
-  VALIDATION_TYPES,
   validateCreationItem
 } from "../core/postApproval.js";
 
@@ -25,21 +24,19 @@ test("process matrix exactly represents RL1 through RL5", () => {
   assert.deepEqual(matrixForLevel(1), {
     orientation: "required",
     tabletop: "required",
-    drill: "optional",
-    functional: "not-required"
+    drill: "optional"
   });
   assert.equal(matrixForLevel(3).orientation, "twice-yearly");
   assert.equal(matrixForLevel(4).tabletop, "not-required");
-  assert.equal(matrixForLevel(5).functional, "required");
-  assert.equal(VALIDATION_TYPES.functional, "Functional Test Validation");
+  assert.equal(Object.hasOwn(matrixForLevel(5), "functional"), false);
 });
 
 test("required items are selected and optional items are not", () => {
   const items = buildPostApprovalItems({ applicationComponents: [component(1)] }, "2026-10-22");
-  assert.equal(items.length, 4);
+  assert.equal(items.length, 3);
   assert.equal(items.find(item => item.kind === "orientation").selected, true);
   assert.equal(items.find(item => item.kind === "drill").selected, false);
-  assert.equal(items.find(item => item.kind === "functional").selected, false);
+  assert.equal(items.some(item => item.kind === "functional"), false);
   assert.equal(items[0].date, "10/22/2026");
   assert.equal(items.find(item => item.kind === "orientation").nextDueDate, "10/22/2027");
 });
@@ -58,6 +55,19 @@ test("creation validation rejects matrix-inapplicable records", () => {
     description: "A sufficiently detailed test description for validation."
   }, row);
   assert.ok(errors.some(error => error.includes("not applicable")));
+});
+
+test("functional validation is excluded from post-approval automation", () => {
+  const row = component(5);
+  const items = buildPostApprovalItems({ applicationComponents: [row] }, "2026-10-23");
+  assert.equal(items.some(item => item.kind === "functional"), false);
+  const errors = validateCreationItem({
+    componentId: row.Id,
+    type: "Functional Test Validation",
+    date: "10/23/2026",
+    description: "Functional validation must not be created by this automation."
+  }, row);
+  assert.ok(errors.some(error => error.includes("Unsupported validation type")));
 });
 
 test("post-approval date defaults to the ERPS approval date", () => {

@@ -4,6 +4,8 @@
   const extensionApi = globalThis.browser || globalThis.chrome;
   const CONTAINER_SELECTOR = '[id^="formentrycontainer1500_ENTITY_"]';
   const BUTTON_CLASS = "drpa-post-action";
+  const SIDEBAR_ITEM_ID = "drpa-erps-sidebar-item";
+  const EMBEDDED_PANEL_ID = "drpa-erps-embedded-panel";
   const cache = new Map();
   const inFlight = new Map();
   let scanTimer = null;
@@ -51,6 +53,124 @@
       container.querySelector("header.widgetHeader") || container;
   }
 
+  function currentPlanId() {
+    const containers = [...document.querySelectorAll(CONTAINER_SELECTOR)];
+    const visible = containers.find(container => {
+      const form = container.querySelector('[id^="formContainer1500"]');
+      return form && globalThis.getComputedStyle(form).display !== "none";
+    });
+    return planIdFromContainer(visible || containers.at(-1));
+  }
+
+  function embeddedUrl(planId, view) {
+    const url = new URL(extensionApi.runtime.getURL("popup.html"));
+    url.searchParams.set("view", "embedded");
+    if (Number.isSafeInteger(Number(planId)) && Number(planId) > 0) {
+      url.searchParams.set("planId", String(Number(planId)));
+      url.searchParams.set("pendingView", view);
+    }
+    return url.toString();
+  }
+
+  function initiatorEvidence() {
+    const displayName = document.querySelector("#userAvatarDetails .user-primary-text")?.textContent?.trim() || "";
+    const userId = document.querySelector("#userAvatarDetails .user-secondary-text span")?.textContent?.trim() ||
+      document.querySelector("#userAvatarDetails .user-secondary-text")?.getAttribute("title")?.trim() || "";
+    return { displayName, userId };
+  }
+
+  async function captureInitiator() {
+    try {
+      await request("CAPTURE_WORKFLOW_INITIATOR", initiatorEvidence());
+    } catch {
+      // The embedded UI will show that initiator evidence is unavailable.
+    }
+  }
+
+  function returnToErpsHome() {
+    const dashboard = document.querySelector("#left-panel .menu-item-dashboard");
+    if (dashboard) dashboard.click();
+    else globalThis.location.assign("/");
+  }
+
+  function openEmbeddedPanel(planId, view = "explorer") {
+    const source = embeddedUrl(planId, view);
+    const host = document.querySelector("#content") || document.querySelector("#main");
+    if (!host) return;
+    const existing = document.getElementById(EMBEDDED_PANEL_ID);
+    if (existing) {
+      const frame = existing.querySelector("iframe");
+      if (frame?.src !== source) frame.src = source;
+      return;
+    }
+    const shell = document.createElement("section");
+    shell.id = EMBEDDED_PANEL_ID;
+    shell.className = "drpa-erps-main-page";
+    shell.setAttribute("aria-label", "DR Plan Review and Automation");
+    const header = document.createElement("header");
+    header.className = "drpa-erps-main-page__header";
+    const title = document.createElement("strong");
+    title.textContent = "DR Plan Review and Automation";
+    const home = document.createElement("button");
+    home.type = "button";
+    home.className = "drpa-erps-main-page__home";
+    home.textContent = "Return to ERPS Dashboard";
+    home.addEventListener("click", returnToErpsHome);
+    header.append(title, home);
+    const frame = document.createElement("iframe");
+    frame.className = "drpa-erps-main-page__frame";
+    frame.src = source;
+    frame.title = "DR Plan Review and Automation";
+    shell.append(header, frame);
+    host.replaceChildren(shell);
+  }
+
+  async function openDrPlugin(anchor) {
+    const label = anchor.querySelector(".drpa-erps-sidebar-label");
+    const original = label?.textContent || "DR Plugin";
+    if (label) label.textContent = "Opening…";
+    await captureInitiator();
+    openEmbeddedPanel(null, "explorer");
+    globalThis.setTimeout(() => {
+      if (anchor.isConnected && label) label.textContent = original;
+    }, 700);
+  }
+
+  function ensureSidebarAction() {
+    if (document.getElementById(SIDEBAR_ITEM_ID)) return;
+    const menu = document.querySelector("#profile-alert > ul.side-nav-menu") ||
+      document.querySelector("#left-panel .sidenav-middle-section ul.side-nav-menu");
+    if (!menu) return;
+    const item = document.createElement("li");
+    item.id = SIDEBAR_ITEM_ID;
+    item.className = "menu-link-item drpa-erps-sidebar-item";
+    item.title = "Open DR Plan Review and Automation";
+    item.setAttribute("data-toggle", "tooltip");
+    item.setAttribute("data-placement", "right");
+    const anchor = document.createElement("a");
+    anchor.href = "#";
+    anchor.className = "menu-item-link side-navbar-text drpa-erps-sidebar-link";
+    anchor.setAttribute("role", "button");
+    const iconWrap = document.createElement("span");
+    iconWrap.className = "menu-link-icon";
+    const icon = document.createElement("i");
+    icon.className = "fal fa-shield-check";
+    icon.setAttribute("aria-hidden", "true");
+    iconWrap.append(icon);
+    const label = document.createElement("span");
+    label.className = "menu-link-text ms-3 drpa-erps-sidebar-label";
+    label.textContent = "DR Plugin";
+    anchor.append(iconWrap, label);
+    anchor.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      openDrPlugin(anchor);
+    });
+    item.append(anchor);
+    const settings = menu.querySelector("#menu-settings");
+    menu.insertBefore(item, settings || null);
+  }
+
   function removeAction(container) {
     container.querySelectorAll(`.${BUTTON_CLASS}`).forEach(button => button.remove());
   }
@@ -59,19 +179,13 @@
     button.disabled = true;
     const original = button.querySelector(".drpa-post-action__label")?.textContent || "Complete Post-DR Process";
     const label = button.querySelector(".drpa-post-action__label");
-    if (label) label.textContent = "Opening side pane…";
-    try {
-      const response = await request("OPEN_POST_APPROVAL_PANEL", { planId });
-      if (!response?.ok) throw new Error(response?.error?.message || "Unable to open the extension side pane.");
-      if (!response.data?.opened && label) label.textContent = "Use extension toolbar to continue";
-    } catch {
-      if (label) label.textContent = "Use extension toolbar to continue";
-    } finally {
+    if (label) label.textContent = "Opening DR Plugin…";
+    await captureInitiator();
+    openEmbeddedPanel(planId, "automation");
+    globalThis.setTimeout(() => {
       button.disabled = false;
-      globalThis.setTimeout(() => {
-        if (button.isConnected && label) label.textContent = original;
-      }, 4_000);
-    }
+      if (button.isConnected && label) label.textContent = original;
+    }, 700);
   }
 
   function createAction(status, planId) {
@@ -117,6 +231,7 @@
   }
 
   function scan(force = false) {
+    ensureSidebarAction();
     document.querySelectorAll(CONTAINER_SELECTOR).forEach(container => evaluateContainer(container, force));
   }
 
@@ -139,5 +254,6 @@
       scan(true);
     }
   });
+  ensureSidebarAction();
   scan(false);
 })();

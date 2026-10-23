@@ -2,10 +2,8 @@ $ErrorActionPreference = "Stop"
 
 $workspaceRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $distRoot = [System.IO.Path]::GetFullPath((Join-Path $workspaceRoot "dist"))
-$artifactsRoot = [System.IO.Path]::GetFullPath((Join-Path $workspaceRoot "artifacts"))
 
-if (-not $distRoot.StartsWith($workspaceRoot, [System.StringComparison]::OrdinalIgnoreCase) -or
-    -not $artifactsRoot.StartsWith($workspaceRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+if (-not $distRoot.StartsWith($workspaceRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "Resolved package paths are outside the workspace."
 }
 
@@ -20,11 +18,11 @@ foreach ($source in @($chromiumSource, $firefoxSource)) {
     }
 }
 
-New-Item -ItemType Directory -Force -Path $artifactsRoot | Out-Null
+New-Item -ItemType Directory -Force -Path $distRoot | Out-Null
 
-$chromiumZip = Join-Path $artifactsRoot "dr-plan-review-chromium-$version.zip"
-$firefoxZip = Join-Path $artifactsRoot "dr-plan-review-firefox-$version.zip"
-$firefoxXpi = Join-Path $artifactsRoot "dr-plan-review-firefox-$version-unsigned.xpi"
+$chromiumZip = Join-Path $distRoot "dr-plan-review-chromium-$version.zip"
+$firefoxZip = Join-Path $distRoot "dr-plan-review-firefox-$version.zip"
+$firefoxXpi = Join-Path $distRoot "dr-plan-review-firefox-$version-unsigned.xpi"
 
 Compress-Archive -Path (Join-Path $chromiumSource "*") -DestinationPath $chromiumZip -CompressionLevel Optimal -Force
 Compress-Archive -Path (Join-Path $firefoxSource "*") -DestinationPath $firefoxZip -CompressionLevel Optimal -Force

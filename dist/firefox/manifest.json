@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "DR Plan Review and Automation",
-  "version": "1.0.2",
+  "version": "1.2.0",
   "description": "Validate ERPS disaster recovery plans and prepare confirmed post-approval validation records.",
   "permissions": [
     "storage"
@@ -13,6 +13,30 @@
   "action": {
     "default_title": "Open DR Plan side pane"
   },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://boeing.continuitylogic.com/*"
+      ],
+      "js": [
+        "content_script.js"
+      ],
+      "css": [
+        "content_script.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "popup.html"
+      ],
+      "matches": [
+        "https://boeing.continuitylogic.com/*"
+      ]
+    }
+  ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
   },

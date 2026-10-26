@@ -17,10 +17,12 @@ const common = {
   name: "DR Plan Review and Automation",
   version,
   description: "Validate ERPS disaster recovery plans and prepare confirmed post-approval validation records.",
-  permissions: ["storage"],
+  permissions: ["storage", "tabs", "scripting"],
   host_permissions: [
     "https://boeing.continuitylogic.com/*",
-    "https://us-gov-rest-prd-formbuilder.continuitylogic.com/*"
+    "https://us-gov-rest-prd-formbuilder.continuitylogic.com/*",
+    "https://esats.web.boeing.com/*",
+    "https://service-gateway.tas-phx.apps.boeing.com/*"
   ],
   action: {
     default_title: "Open DR Plan side pane"

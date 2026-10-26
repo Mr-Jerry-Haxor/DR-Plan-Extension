@@ -80,12 +80,13 @@ test("validation always returns the authoritative 32 checkpoint IDs", () => {
 test("reference-shaped fixture validates deterministic core rules", () => {
   const report = runValidation(fixture());
   const status = id => report.results.find(item => item.id === id).status;
-  for (const id of ["ERPS3", "ERPS5", "ERPS6", "ERPS7", "ERPS10", "ERPS11", "ERPS12", "ERPS13", "ERPS14", "ERPS15", "ERPS19", "ERPS20", "ERPS22", "ERPS23", "ERPS24", "ERPS26", "ERPS28", "ERPS29", "ERPS30", "ERPS32"]) {
+  for (const id of ["ERPS3", "ERPS6", "ERPS7", "ERPS10", "ERPS11", "ERPS12", "ERPS13", "ERPS14", "ERPS15", "ERPS19", "ERPS20", "ERPS22", "ERPS23", "ERPS24", "ERPS26", "ERPS28", "ERPS29", "ERPS30", "ERPS32"]) {
     assert.equal(status(id), "PASS", `${id} should pass`);
   }
   assert.equal(status("ERPS25"), "NA");
   assert.equal(status("ERPS31"), "NA");
   assert.equal(status("ERPS4"), "REVIEW");
+  assert.equal(status("ERPS5"), "REVIEW");
 });
 
 test("activation procedure without a responsible actor fails ERPS13", () => {

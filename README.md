@@ -79,6 +79,13 @@ filters work locally without discarding selections. Multiple filtered plans can
 be selected and validated together. Each plan shows its ERPS status and the
 most recently captured plugin workflow initiator.
 
+When an ESATS tab is already signed in, validation reads the token transiently
+from that tab's local or session storage and requests the ESATS contact-summary
+endpoint for each application. The DR extension does not copy the bearer token
+into extension storage. ESATS evidence is used for Organization, Business Unit,
+Application Manager, and live application-status checks; unavailable or
+historical evidence remains REVIEW.
+
 ## Safety and data handling
 
 The extension uses the existing ERPS browser session with
@@ -88,9 +95,11 @@ plan data. A narrowly scoped isolated content script adds only the conditional
 Post-DR action, the permanent DR Plugin sidebar entry, and the embedded main
 workspace. The latest sanitized validation result, UI preferences, and a
 bounded local audit of the ERPS-verified workflow initiator are stored locally.
-The audit keeps at most 100 events and excludes email, phone, authorization,
-and cookie data. Creation requests are not automatically retried, preventing
-duplicate records after an ambiguous network failure.
+The workflow history is stored in IndexedDB table `erps_dr_plugin_table` and
+contains only plan ID, action type, initiator, completion time, and result
+counts. It excludes email, phone, authorization, bearer-token, and cookie data.
+Creation requests are not automatically retried, preventing duplicate records
+after an ambiguous network failure.
 
 ## Modular checkpoint architecture
 

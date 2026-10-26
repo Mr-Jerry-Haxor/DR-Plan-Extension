@@ -13,7 +13,6 @@ const state = {
   selectedPlanId: null,
   contexts: new Map(),
   reports: [],
-  workflowAuditByPlan: new Map(),
   context: null,
   report: null,
   automationItems: [],
@@ -137,7 +136,7 @@ function filteredPlans() {
   const from = $("approvalFromDate").value ? new Date(`${$("approvalFromDate").value}T00:00:00`) : null;
   const to = $("approvalToDate").value ? new Date(`${$("approvalToDate").value}T23:59:59`) : null;
   return state.plans.filter(plan => {
-    const text = `${plan.id} ${plan.name} ${plan.longName} ${plan.organization}`.toLowerCase();
+    const text = `${plan.id} ${plan.name} ${plan.longName} ${plan.organization} ${plan.approverName}`.toLowerCase();
     const date = normalizedDate(plan.approvalDate);
     return (!query || text.includes(query)) &&
       (!status || plan.status.toLowerCase() === status) &&
@@ -179,11 +178,7 @@ function renderPlans() {
       state.selectedPlanId = state.selectedPlanIds.size === 1 ? [...state.selectedPlanIds][0] : null;
       updateSelectionState();
     });
-    const metadata = [plan.status, plan.approvalDate && `Approved ${plan.approvalDate}`, plan.revision && `Rev ${plan.revision}`].filter(Boolean).join(" • ");
-    const audit = state.workflowAuditByPlan.get(plan.id);
-    const auditText = audit
-      ? `Last workflow initiated by ${audit.initiatedBy?.displayName || "Unavailable"} (${audit.initiatedBy?.userId || "Unavailable"})`
-      : "No plugin workflow recorded";
+    const metadata = [plan.status, plan.approverName && `Approver: ${plan.approverName}`, plan.approvalDate && `Last approved: ${plan.approvalDate}`, plan.revision && `Rev ${plan.revision}`].filter(Boolean).join(" • ");
     const statusClass = plan.status.toLowerCase().replace(/\s+/g, "-");
     const label = node("label", { className: "plan-option assessment-row" }, [
       input,
@@ -193,8 +188,7 @@ function renderPlans() {
           node("span", { className: `status ${statusClass}`, text: plan.status || "Unknown" })
         ]),
         node("div", { className: "asset-sub", text: `${plan.id}${plan.longName ? ` • ${plan.longName}` : ""}` }),
-        node("div", { className: "asset-sub status-detail", text: metadata }),
-        node("div", { className: "asset-sub workflow-initiator", text: auditText })
+        node("div", { className: "asset-sub status-detail", text: metadata })
       ])
     ]);
     list.append(label);
@@ -208,16 +202,38 @@ function renderPlans() {
   updateSelectionState();
 }
 
-async function loadPlans(force = false) {
-  if (state.plans.length && !force) return renderPlans();
-  setBusy(true, "Loading all accessible DR Plans…");
+async function loadPlans(force = false, search = "", loadAll = pageView === "embedded") {
+  const query = String(search || "").trim();
+  if (!loadAll && !query) {
+    state.plans = [];
+    state.filteredPlans = [];
+    renderPlans();
+    $("planCount").textContent = "Enter an application name or plan ID to search accessible DR Plans.";
+    return;
+  }
+  if (state.plans.length && !force && loadAll) return renderPlans();
+  setBusy(true, loadAll ? "Loading accessible DR Plans…" : "Searching accessible DR Plans…");
   try {
-    const result = await request("LIST_PLANS", { search: "" });
-    state.plans = result.rows;
-    state.planCatalogMeta = { total: result.total, pagesFetched: result.pagesFetched, truncated: result.truncated };
+    const rows = [];
+    let start = 0;
+    let total = 0;
+    let pagesFetched = 0;
+    do {
+      const page = await request("LIST_PLANS_PAGE", { start, length: 100, search: query });
+      total = Number(page.total) || 0;
+      pagesFetched += 1;
+      rows.push(...page.rows);
+      start += 100;
+      $("busyMessage").textContent = loadAll
+        ? "Loaded " + Math.min(rows.length, total) + " of " + total + " accessible DR Plans…"
+        : "Loaded " + rows.length + " matching DR Plan(s)…";
+      if (!loadAll || !page.rows.length) break;
+    } while (start < total);
+    state.plans = rows;
+    state.planCatalogMeta = { total, pagesFetched, truncated: rows.length < total };
     populateOrganizationFilter();
     renderPlans();
-    if (result.truncated) setMessage($("sessionMessage"), `${result.rows.length} of ${result.total} plans loaded.`, "error");
+    if (rows.length < total) setMessage($("sessionMessage"), rows.length + " of " + total + " plans loaded.", "error");
   } catch (error) {
     setMessage($("sessionMessage"), error.message, "error");
   } finally {
@@ -310,6 +326,11 @@ async function validateSelected() {
       const planId = planIds[index];
       $("busyMessage").textContent = `Loading DR Plan ${index + 1} of ${planIds.length}…`;
       const context = await request("LOAD_PLAN", { planId });
+      try {
+        context.esatsEvidence = await request("GET_ESATS_EVIDENCE", { planId });
+      } catch (error) {
+        context.esatsEvidence = { applications: [], error: error.message };
+      }
       const report = runValidation(context);
       state.contexts.set(planId, context);
       state.reports.push(report);
@@ -402,7 +423,6 @@ async function createSelected() {
       skippedCount += result.skipped.length;
       const initiator = result.workflowAudit?.initiatedBy;
       if (initiator) initiators.add(`${initiator.displayName} (${initiator.userId})`);
-      if (result.workflowAudit) state.workflowAuditByPlan.set(Number(planId), result.workflowAudit);
     }
     const initiatedBy = initiators.size ? ` Initiated by ${[...initiators].join(", ")}.` : "";
     const successMessage = `${createdCount} record(s) created; ${skippedCount} duplicate(s) skipped.${initiatedBy}`;
@@ -420,10 +440,14 @@ async function createSelected() {
 }
 
 $("checkSessionBtn").addEventListener("click", checkSession);
-$("refreshPlansBtn").addEventListener("click", () => loadPlans(true));
+$("refreshPlansBtn").addEventListener("click", () => loadPlans(true, $("planSearch").value, pageView === "embedded"));
 function applyPlanFilters() { state.planPage = 1; renderPlans(); }
-$("searchForm").addEventListener("submit", event => { event.preventDefault(); applyPlanFilters(); });
-$("planSearch").addEventListener("input", applyPlanFilters);
+$("searchForm").addEventListener("submit", event => {
+  event.preventDefault();
+  if (pageView === "embedded") applyPlanFilters();
+  else loadPlans(true, $("planSearch").value, false);
+});
+$("planSearch").addEventListener("input", () => { if (pageView === "embedded") applyPlanFilters(); });
 $("planStatusFilter").addEventListener("change", applyPlanFilters);
 $("organizationFilter").addEventListener("change", applyPlanFilters);
 $("approvalFromDate").addEventListener("change", applyPlanFilters);
@@ -483,7 +507,7 @@ async function loadRequestedPlan(planId, requestedView) {
   state.selectedPlanIds.clear();
   state.selectedPlanIds.add(planId);
   state.selectedPlanId = planId;
-  await loadPlans(false);
+  await loadPlans(false, String(planId), pageView === "embedded");
   await validateSelected();
   if (requestedView === "automation") {
     $("automationSection").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -509,9 +533,6 @@ async function consumePendingPlan() {
 async function initialize() {
   await checkSession();
   try {
-    const storedAudit = await storageGet("workflowAudit");
-    const auditRows = Array.isArray(storedAudit.workflowAudit) ? storedAudit.workflowAudit : [];
-    state.workflowAuditByPlan = new Map(auditRows.map(row => [Number(row.planId), row]));
     const initiator = await request("GET_WORKFLOW_INITIATOR");
     $("initiatorLabel").textContent = initiator
       ? `Initiated by: ${initiator.displayName} (${initiator.userId})`

@@ -4,6 +4,8 @@
   const extensionApi = globalThis.browser || globalThis.chrome;
   const FORM_API = "https://us-gov-rest-prd-formbuilder.continuitylogic.com/api";
   const ERPS_HOME = "https://boeing.continuitylogic.com/";
+  const ESATS_ORIGIN = "https://esats.web.boeing.com";
+  const ESATS_CONTACT_SUMMARY = "https://service-gateway.tas-phx.apps.boeing.com/gateway/asset/BusinessApplicationSummary/GetContactDetailsSummary";
   const VERSION = 1;
   const MAX_MESSAGE_BYTES = 100_000;
   const MAX_PLANS = 50_000;
@@ -166,16 +168,11 @@
     };
   }
 
-  async function listPlans(search = "") {
+  async function getPlanPage(start = 0, length = PAGE_SIZE, search = "") {
     const columns = [
       "Id", "PlanName7870", "LongPlanName8545", "PlanApprovalStatus8334",
-      "PlanApprovalDate8330", "PlanRevisionLetter8342", "Organization8345"
+      "PlanApprovalDate8330", "PlanRevisionLetter8342", "Organization8345", "PlanApprovers7920"
     ];
-    let start = 0;
-    let total = 0;
-    let pagesFetched = 0;
-    const rows = [];
-    do {
       const body = listRequest({
         formId: 1500,
         parentFormId: 1500,
@@ -188,22 +185,42 @@
       body.isGlobalData = "True";
       body.personalizedFormPeoplePickerFilters = "849,717,7919,7946,7920,7947,9586,8508,8505,9624";
       body.drillerConfigId = 5343;
-      const response = await fetchErps(`${FORM_API}/formviewer`, { method: "POST", body: JSON.stringify(body) });
-      const page = responseRows(response);
-      total = Number(response?.recordsFiltered ?? response?.recordsTotal) || page.length;
-      if (total > MAX_PLANS) throw new Error(`ERPS returned ${total} DR Plans, exceeding the safe client limit of ${MAX_PLANS}.`);
-      pagesFetched += 1;
-      rows.push(...page.map(row => ({
+    const response = await fetchErps(`${FORM_API}/formviewer`, { method: "POST", body: JSON.stringify(body) });
+    const page = responseRows(response);
+    const total = Number(response?.recordsFiltered ?? response?.recordsTotal) || page.length;
+    if (total > MAX_PLANS) throw new Error(`ERPS returned ${total} DR Plans, exceeding the safe client limit of ${MAX_PLANS}.`);
+    return {
+      start,
+      length,
+      total,
+      rows: page.map(row => ({
         id: Number(row.Id),
         name: clean(row.PlanName7870),
         longName: clean(row.LongPlanName8545),
         status: clean(row.PlanApprovalStatus8334),
         approvalDate: clean(row.PlanApprovalDate8330),
         revision: clean(row.PlanRevisionLetter8342),
-        organization: clean(row.Organization8345)
-      })).filter(row => row.id && row.name));
-      start += page.length;
-      if (!page.length) break;
+        organization: clean(row.Organization8345),
+        approverName: lookupArray(row.PlanApprovers7920)
+          .map(person => clean(person.FullName9612 || person.FullNameFirstLast || person.Name || [person.FirstName608, person.LastName610].filter(Boolean).join(" ")))
+          .filter(Boolean)
+          .join(", ")
+      })).filter(row => row.id && row.name)
+    };
+  }
+
+  async function listPlans(search = "") {
+    let start = 0;
+    let total = 0;
+    let pagesFetched = 0;
+    const rows = [];
+    do {
+      const page = await getPlanPage(start, PAGE_SIZE, search);
+      total = page.total;
+      pagesFetched += 1;
+      rows.push(...page.rows);
+      start += PAGE_SIZE;
+      if (!page.rows.length) break;
     } while (start < total);
     return { rows, total, pagesFetched, truncated: rows.length < total };
   }
@@ -291,6 +308,105 @@
     };
   }
 
+  async function getEsatsSummary(assetId) {
+    const id = clean(assetId);
+    if (!/^[A-Za-z0-9._-]{1,100}$/.test(id)) throw new Error("A valid ESATS application ID is required.");
+    if (!extensionApi.tabs?.query || !extensionApi.scripting?.executeScript) {
+      throw new Error("This browser does not support the signed-in ESATS session check.");
+    }
+    const tabs = await extensionApi.tabs.query({ url: ESATS_ORIGIN + "/*" });
+    const tab = tabs.find(item => item.id && item.status === "complete") || tabs.find(item => item.id);
+    if (!tab?.id) throw new Error("Open ESATS and sign in before running ESATS validation.");
+    const url = new URL(ESATS_CONTACT_SUMMARY);
+    url.searchParams.set("esatsId", id);
+    const result = await extensionApi.scripting.executeScript({
+      target: { tabId: tab.id },
+      world: "MAIN",
+      args: [url.toString(), ESATS_ORIGIN],
+      func: async (requestUrl, origin) => {
+        const normalize = raw => {
+          if (!raw) return "";
+          let value = String(raw).trim().replace(/^Bearer\s+/i, "");
+          try {
+            const parsed = JSON.parse(value);
+            value = typeof parsed === "string" ? parsed : parsed?.esatsToken || parsed?.access_token || parsed?.token || "";
+          } catch {}
+          return String(value || "").trim();
+        };
+        const token = normalize(localStorage.getItem("esatsToken"));
+        if (!token) return { ok: false, error: "No ESATS session token was found." };
+        try {
+          const response = await fetch(requestUrl, {
+            headers: { Accept: "application/json, text/plain, */*", Authorization: "Bearer " + token },
+            credentials: "omit",
+            cache: "no-store",
+            referrer: origin + "/",
+            referrerPolicy: "strict-origin-when-cross-origin"
+          });
+          const text = await response.text();
+          if (!response.ok) return { ok: false, error: "ESATS returned HTTP " + response.status + "." };
+          return { ok: true, data: text ? JSON.parse(text) : null };
+        } catch {
+          return { ok: false, error: "The ESATS request could not be completed." };
+        }
+      }
+    });
+    const value = result?.[0]?.result;
+    if (!value?.ok) throw new Error(value?.error || "ESATS did not return application data.");
+    return value.data;
+  }
+
+  function findEsatsPrimitive(source, expression, depth = 0) {
+    if (!source || typeof source !== "object" || depth > 6) return "";
+    for (const [key, value] of Object.entries(source)) {
+      if (expression.test(key) && value != null && typeof value !== "object") return clean(value);
+    }
+    for (const value of Object.values(source)) {
+      const found = findEsatsPrimitive(value, expression, depth + 1);
+      if (found) return found;
+    }
+    return "";
+  }
+
+  function findEsatsManagerIds(source, output = [], depth = 0) {
+    if (!source || typeof source !== "object" || depth > 6) return output;
+    if (clean(source.roleType?.name) === "ApplicationManager") {
+      const users = Array.isArray(source.users) ? source.users : source.user ? [source.user] : [];
+      users.forEach(user => {
+        const id = clean(user?.bemsId || user?.bemsID || user?.employeeId);
+        if (id) output.push(id.toLowerCase());
+      });
+    }
+    Object.values(source).forEach(value => {
+      if (value && typeof value === "object") findEsatsManagerIds(value, output, depth + 1);
+    });
+    return output;
+  }
+
+  async function getEsatsEvidence(planId) {
+    const context = await loadPlan(planId);
+    const applications = [];
+    for (const component of context.applicationComponents) {
+      const app = lookupArray(component.Application8408)[0] || {};
+      const assetId = clean(app.ApplicationID1622 || component.AppID8556);
+      try {
+        const response = await getEsatsSummary(assetId);
+        applications.push({
+          componentId: Number(component.Id),
+          assetId,
+          available: true,
+          organization: findEsatsPrimitive(response, /maintain.*org|organization/i),
+          businessUnit: findEsatsPrimitive(response, /business.*unit/i),
+          status: findEsatsPrimitive(response, /status|active/i),
+          applicationManagerIds: [...new Set(findEsatsManagerIds(response))]
+        });
+      } catch (error) {
+        applications.push({ componentId: Number(component.Id), assetId, available: false, error: clean(error.message) });
+      }
+    }
+    return { applications };
+  }
+
   async function loadPlan(planId) {
     const id = positiveId(planId, "plan ID");
     const url = new URL(`${FORM_API}/formviewer`);
@@ -354,6 +470,7 @@
       Id: rawPlan.Id,
       PlanName7870: rawPlan.PlanName7870,
       ParentFolder8435: rawPlan.ParentFolder8435,
+      BusinessUnit8344: rawPlan.BusinessUnit8344,
       Organization8345: rawPlan.Organization8345,
       PlanOwner17919: safePeople(rawPlan.PlanOwner17919),
       PlanOwner28505: safePeople(rawPlan.PlanOwner28505),
@@ -569,25 +686,56 @@
     return initiator;
   }
 
+  function openWorkflowHistoryDb() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open("erps_dr_plugin_db", 1);
+      request.onupgradeneeded = () => {
+        const database = request.result;
+        if (!database.objectStoreNames.contains("erps_dr_plugin_table")) {
+          const store = database.createObjectStore("erps_dr_plugin_table", { keyPath: "id", autoIncrement: true });
+          store.createIndex("planId", "planId", { unique: false });
+          store.createIndex("completedAt", "completedAt", { unique: false });
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(new Error("Unable to open workflow history storage."));
+    });
+  }
+
+  async function addWorkflowHistory(event) {
+    const database = await openWorkflowHistoryDb();
+    try {
+      await new Promise((resolve, reject) => {
+        const transaction = database.transaction("erps_dr_plugin_table", "readwrite");
+        transaction.objectStore("erps_dr_plugin_table").add(event);
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(new Error("Unable to save workflow history."));
+      });
+    } finally {
+      database.close();
+    }
+  }
+
   async function recordWorkflowAudit(planId, outcome) {
-    const stored = await extensionApi.storage.local.get(["workflowInitiator", "workflowAudit"]);
+    const stored = await extensionApi.storage.local.get("workflowInitiator");
     const initiator = stored.workflowInitiator || {
       userId: "Unavailable",
       displayName: "Unavailable",
       capturedAt: new Date().toISOString()
     };
-    const audit = Array.isArray(stored.workflowAudit) ? stored.workflowAudit.slice(-99) : [];
     const event = {
       planId: Number(planId),
-      planName: clean(outcome.planName),
-      initiatedBy: initiator,
+      action: "post-dr-process",
+      initiatedBy: {
+        userId: initiator.userId,
+        displayName: initiator.displayName
+      },
       completedAt: new Date().toISOString(),
       createdCount: outcome.created.length,
       skippedCount: outcome.skipped.length,
       headerUpdated: Boolean(outcome.headerUpdate?.changed)
     };
-    audit.push(event);
-    await extensionApi.storage.local.set({ workflowAudit: audit, lastWorkflowAudit: event });
+    await addWorkflowHistory(event);
     return event;
   }
 
@@ -805,8 +953,12 @@
       }
       case "LIST_PLANS":
         return listPlans(payload.search);
+      case "LIST_PLANS_PAGE":
+        return getPlanPage(payload.start, payload.length, payload.search);
       case "LOAD_PLAN":
         return loadPlan(payload.planId);
+      case "GET_ESATS_EVIDENCE":
+        return getEsatsEvidence(payload.planId);
       case "GET_POST_APPROVAL_STATUS":
         if (!isErpsPageSender(sender)) throw new Error("Post-approval status can be requested only from ERPS.");
         return postApprovalStatus(payload.planId);

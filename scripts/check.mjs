@@ -12,8 +12,12 @@ for (const target of targets) {
   assert.ok(manifest.description.length <= 132, `${target} description exceeds 132 characters`);
   assert.deepEqual(manifest.host_permissions, [
     "https://boeing.continuitylogic.com/*",
-    "https://us-gov-rest-prd-formbuilder.continuitylogic.com/*"
+    "https://us-gov-rest-prd-formbuilder.continuitylogic.com/*",
+    "https://esats.web.boeing.com/*",
+    "https://service-gateway.tas-phx.apps.boeing.com/*"
   ]);
+  assert.ok(manifest.permissions.includes("tabs"));
+  assert.ok(manifest.permissions.includes("scripting"));
   for (const file of ["popup.html", "popup.css", "popup.js", "service_worker.js", "content_script.js", "content_script.css", "core/validation.js", "core/postApproval.js", "checkpoints/index.js", "checkpoints/ERPS32.js"]) {
     assert.ok(fs.existsSync(path.join(dir, file)), `${target} is missing ${file}`);
   }
@@ -62,9 +66,10 @@ for (const contract of ["openPanelOnActionClick", "sidebarAction.toggle()"] ) {
 for (const contract of ["GET_POST_APPROVAL_STATUS", "postApprovalStatus"] ) {
   assert.ok(worker.includes(contract), `ERPS page action contract is missing: ${contract}`);
 }
-for (const contract of ["RUN_POST_APPROVAL_PROCESS", "pagesFetched", "POST_PROCESS_DESCRIPTIONS"]) {
+for (const contract of ["RUN_POST_APPROVAL_PROCESS", "LIST_PLANS_PAGE", "pagesFetched", "POST_PROCESS_DESCRIPTIONS", "GET_ESATS_EVIDENCE", "erps_dr_plugin_table"]) {
   assert.ok(worker.includes(contract), `Post-DR background process contract is missing: ${contract}`);
 }
+assert.ok(!worker.includes("riskProfilerEsatsBearerToken"), "ESATS bearer tokens must not be stored in extension storage.");
 for (const contract of ["CAPTURE_WORKFLOW_INITIATOR", "GET_WORKFLOW_INITIATOR", "recordWorkflowAudit", "/User/GetUser"]) {
   assert.ok(worker.includes(contract), `Workflow initiator contract is missing: ${contract}`);
 }

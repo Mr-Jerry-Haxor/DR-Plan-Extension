@@ -6,12 +6,17 @@
   const ERPS_HOME = "https://boeing.continuitylogic.com/";
   const VERSION = 1;
   const MAX_MESSAGE_BYTES = 100_000;
-  const MAX_PLANS = 10_000;
+  const MAX_PLANS = 50_000;
   const PAGE_SIZE = 100;
   const PLAN_DATE_FIELDS = {
     "Orientation Validation": "OrientationDate8341",
     "Table Top Validation": "TableTopExerciseDate8336",
     "Drill Validation": "DrillDate8337"
+  };
+  const POST_PROCESS_DESCRIPTIONS = {
+    "Orientation Validation": "Orientation email sent to recovery team participants listed in the DR plan to save the plan in local desktop for future reference.",
+    "Table Top Validation": "All members of the recovery team are familiar with the documented recovery tasks and also verified that these tasks can be executed as outlined and will lead to the successful recovery of the asset.",
+    "Drill Validation": "During the review, the recovery team examined the recovery team list, plan strategy, and activation criteria. At this time, no issues have been identified."
   };
 
   const CHILD_COLUMNS = {
@@ -168,6 +173,7 @@
     ];
     let start = 0;
     let total = 0;
+    let pagesFetched = 0;
     const rows = [];
     do {
       const body = listRequest({
@@ -185,6 +191,8 @@
       const response = await fetchErps(`${FORM_API}/formviewer`, { method: "POST", body: JSON.stringify(body) });
       const page = responseRows(response);
       total = Number(response?.recordsFiltered ?? response?.recordsTotal) || page.length;
+      if (total > MAX_PLANS) throw new Error(`ERPS returned ${total} DR Plans, exceeding the safe client limit of ${MAX_PLANS}.`);
+      pagesFetched += 1;
       rows.push(...page.map(row => ({
         id: Number(row.Id),
         name: clean(row.PlanName7870),
@@ -196,8 +204,8 @@
       })).filter(row => row.id && row.name));
       start += page.length;
       if (!page.length) break;
-    } while (start < total && rows.length < MAX_PLANS);
-    return { rows, total, truncated: rows.length < total };
+    } while (start < total);
+    return { rows, total, pagesFetched, truncated: rows.length < total };
   }
 
   async function formMetadata(formId, parentFormId, parentEntityId) {
@@ -463,6 +471,7 @@
     const approvalDate = canonicalErpsDate(context.plan.PlanApprovalDate8330);
     const eligible = approved && Boolean(approvalDate) && context.applicationComponents.length > 0;
     const missing = [];
+    const actions = [];
     if (eligible) {
       const requiredTypes = new Set();
       for (const component of context.applicationComponents) {
@@ -470,19 +479,27 @@
           const requirement = requirementFor(componentRecoveryLevel(component), type);
           if (requirement !== "required" && requirement !== "twice-yearly") continue;
           requiredTypes.add(type);
-          const exists = context.validations.some(row =>
-            String(row.ApplicationTestedExercised9582) === String(component.Id) &&
-            clean(row.TestExerciseType9526) === type &&
-            canonicalErpsDate(row.TestExerciseDate9527) === approvalDate &&
-            clean(row.TestScenarioDescription9534).length >= 10
-          );
-          if (!exists) missing.push(`${clean(component.PlanName8555) || `Application ${component.Id}`}: ${type}`);
         }
       }
       for (const type of requiredTypes) {
         const fieldName = PLAN_DATE_FIELDS[type];
-        if (canonicalErpsDate(context.plan[fieldName]) !== approvalDate) {
+        const planDate = canonicalErpsDate(context.plan[fieldName]);
+        if (!planDate || planDate < approvalDate) {
           missing.push(`IT Plan header: ${type}`);
+          for (const component of context.applicationComponents) {
+            const requirement = requirementFor(componentRecoveryLevel(component), type);
+            if (requirement !== "required" && requirement !== "twice-yearly") continue;
+            actions.push({
+              key: `${component.Id}:${type}`,
+              componentId: Number(component.Id),
+              applicationName: clean(component.PlanName8555) || `Application ${component.Id}`,
+              type,
+              date: displayErpsDate(context.plan.PlanApprovalDate8330),
+              description: POST_PROCESS_DESCRIPTIONS[type],
+              requirement,
+              selected: true
+            });
+          }
         }
       }
     }
@@ -493,8 +510,25 @@
       approved,
       eligible,
       completed: eligible && missing.length === 0,
-      missing: [...new Set(missing)]
+      missing: [...new Set(missing)],
+      actions
     };
+  }
+
+  async function runPostApprovalProcess(planId, selectedKeys, sender) {
+    if (!isErpsPageSender(sender)) throw new Error("Post-approval processing can be started only from ERPS.");
+    const status = await postApprovalStatus(planId);
+    if (!status.eligible || status.completed) throw new Error("This plan does not have pending required post-DR header dates.");
+    if (!Array.isArray(selectedKeys) || selectedKeys.length === 0 || selectedKeys.length > status.actions.length) {
+      throw new Error("Select one or more pending post-DR actions.");
+    }
+    const selected = new Set(selectedKeys.map(value => clean(value)));
+    const items = status.actions.filter(action => selected.has(action.key));
+    if (!items.length) throw new Error("The selected post-DR actions are no longer pending.");
+    const outcome = await createValidations(planId, items);
+    await notifyPostApprovalStatusChanged(planId, sender?.tab?.id);
+    const audit = await recordWorkflowAudit(planId, outcome);
+    return { ...outcome, workflowAudit: audit };
   }
 
   async function notifyPostApprovalStatusChanged(planId, sourceTabId) {
@@ -587,6 +621,13 @@
     const parts = dateParts(value);
     return parts.length === 3
       ? `${parts[0]}-${String(parts[1]).padStart(2, "0")}-${String(parts[2]).padStart(2, "0")}`
+      : clean(value);
+  }
+
+  function displayErpsDate(value) {
+    const parts = dateParts(value);
+    return parts.length === 3
+      ? `${String(parts[1]).padStart(2, "0")}/${String(parts[2]).padStart(2, "0")}/${parts[0]}`
       : clean(value);
   }
 
@@ -769,6 +810,8 @@
       case "GET_POST_APPROVAL_STATUS":
         if (!isErpsPageSender(sender)) throw new Error("Post-approval status can be requested only from ERPS.");
         return postApprovalStatus(payload.planId);
+      case "RUN_POST_APPROVAL_PROCESS":
+        return runPostApprovalProcess(payload.planId, payload.selectedKeys, sender);
       case "CAPTURE_WORKFLOW_INITIATOR":
         return captureWorkflowInitiator(payload, sender);
       case "GET_WORKFLOW_INITIATOR": {

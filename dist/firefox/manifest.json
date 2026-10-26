@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "DR Plan Review and Automation",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Validate ERPS disaster recovery plans and prepare confirmed post-approval validation records.",
   "permissions": [
     "storage"

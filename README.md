@@ -49,8 +49,9 @@ read from the environment and are never stored in the repository.
    previously open.
 3. Open an ERPS IT Plan. When the plan is Approved and required post-approval
    records or header dates are missing, ERPS displays **Complete Post-DR
-   Process** in the plan header. Selecting it opens the embedded DR Plugin and
-   loads that plan automatically.
+   Process** beside ERPS Reports, Update, and Save controls. Selecting it keeps
+   the plan open and presents a modal for choosing only the pending post-DR
+   actions.
 4. Alternatively, open the extension from the toolbar and select **Check
    session**.
 5. Search or refresh the DR Plan list, select one plan, then choose
@@ -71,11 +72,12 @@ checked against the recovery-level matrix, and an existing record with the same
 application, validation type, and date is skipped. This makes a retry safe after
 a partial network failure: already confirmed records are not recreated.
 
-The embedded dashboard loads every accessible DR Plan through paginated ERPS
-requests. Search, status, organization, and approval-date filters work locally
-without discarding selections. Multiple filtered plans can be selected and
-validated together. Each plan shows its ERPS status and the most recently
-captured plugin workflow initiator.
+The embedded dashboard gets the ERPS total count first, retrieves every
+accessible DR Plan through sequential server-side pages, and then presents the
+results in 100-plan UI pages. Search, status, organization, and approval-date
+filters work locally without discarding selections. Multiple filtered plans can
+be selected and validated together. Each plan shows its ERPS status and the
+most recently captured plugin workflow initiator.
 
 ## Safety and data handling
 

@@ -62,6 +62,9 @@ for (const contract of ["openPanelOnActionClick", "sidebarAction.toggle()"] ) {
 for (const contract of ["GET_POST_APPROVAL_STATUS", "postApprovalStatus"] ) {
   assert.ok(worker.includes(contract), `ERPS page action contract is missing: ${contract}`);
 }
+for (const contract of ["RUN_POST_APPROVAL_PROCESS", "pagesFetched", "POST_PROCESS_DESCRIPTIONS"]) {
+  assert.ok(worker.includes(contract), `Post-DR background process contract is missing: ${contract}`);
+}
 for (const contract of ["CAPTURE_WORKFLOW_INITIATOR", "GET_WORKFLOW_INITIATOR", "recordWorkflowAudit", "/User/GetUser"]) {
   assert.ok(worker.includes(contract), `Workflow initiator contract is missing: ${contract}`);
 }
@@ -87,6 +90,9 @@ for (const contract of [
   "drpa-erps-main-page",
   "CAPTURE_WORKFLOW_INITIATOR"
 ]) assert.ok(contentScript.includes(contract), `ERPS page button contract is missing: ${contract}`);
+for (const contract of ["reportSelectionArea", "drpa-post-modal", "RUN_POST_APPROVAL_PROCESS"]) {
+  assert.ok(contentScript.includes(contract), `ERPS modal post-process contract is missing: ${contract}`);
+}
 assert.ok(!contentScript.includes("sidePanel.open"), "ERPS DR Plugin must render inside the ERPS main content area");
 
 const packageScript = fs.readFileSync(path.join(root, "scripts", "package.ps1"), "utf8");

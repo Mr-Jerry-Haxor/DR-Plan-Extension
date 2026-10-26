@@ -1,26 +1,14 @@
 .drpa-post-action {
   display: inline-flex !important;
   align-items: center;
-  gap: 8px;
-  margin: 4px 6px !important;
-  padding: 8px 12px !important;
-  border: 1px solid rgba(var(--bs-primary, 12, 20, 39), 1) !important;
-  border-radius: 8px !important;
-  background: rgba(var(--bs-primary, 12, 20, 39), 1) !important;
-  box-shadow: 0 2px 7px rgba(31, 41, 55, .16) !important;
-  color: #fff !important;
-  cursor: pointer !important;
-  font: 600 13px/1.2 "Segoe UI", Arial, sans-serif !important;
-  text-decoration: none !important;
-  vertical-align: middle !important;
+  gap: 4px;
+  white-space: nowrap !important;
 }
 
 .drpa-post-action:hover,
 .drpa-post-action:focus {
-  background: rgba(var(--bs-secondary, 79, 70, 229), 1) !important;
-  color: #fff !important;
-  outline: 2px solid rgba(var(--bs-secondary, 79, 70, 229), .35) !important;
-  outline-offset: 2px !important;
+  border-color: rgba(var(--bs-secondary, 79, 70, 229), 1) !important;
+  color: rgba(var(--bs-secondary, 79, 70, 229), 1) !important;
 }
 
 .drpa-post-action:disabled {
@@ -37,8 +25,8 @@
   min-width: 20px !important;
   padding: 2px 6px !important;
   border-radius: 999px !important;
-  background: rgba(255, 255, 255, .24) !important;
-  color: #fff !important;
+  background: rgba(var(--bs-secondary, 79, 70, 229), .12) !important;
+  color: rgba(var(--bs-secondary, 79, 70, 229), 1) !important;
   font-size: 11px !important;
   text-align: center !important;
 }
@@ -104,3 +92,46 @@
   border: 0 !important;
   background: var(--bs-body-bg, #fff) !important;
 }
+
+.drpa-post-modal {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2147483000 !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: 24px !important;
+  background: rgba(12, 20, 39, .38) !important;
+}
+
+.drpa-post-modal__dialog {
+  width: min(620px, 100%) !important;
+  max-height: min(720px, 90vh) !important;
+  overflow: auto !important;
+  padding: 20px !important;
+  border: 1px solid rgba(var(--bs-border-color, 235, 237, 242), 1) !important;
+  border-radius: 6px !important;
+  background: rgba(var(--bs-body-bg, 255, 255, 255), 1) !important;
+  color: rgba(var(--bs-black, 24, 28, 50), 1) !important;
+  font: 14px/1.45 "Segoe UI", Arial, sans-serif !important;
+  box-shadow: 0 16px 42px rgba(12, 20, 39, .28) !important;
+}
+
+.drpa-post-modal__header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  padding-bottom: 12px !important;
+  border-bottom: 1px solid rgba(var(--bs-border-color, 235, 237, 242), 1) !important;
+}
+
+.drpa-post-modal__header h2 { margin: 0 !important; font-size: 18px !important; }
+.drpa-post-modal__close { border: 0 !important; background: transparent !important; color: inherit !important; cursor: pointer !important; font-size: 26px !important; line-height: 1 !important; }
+.drpa-post-modal__copy { margin: 14px 0 !important; }
+.drpa-post-modal__actions { display: grid !important; gap: 8px !important; }
+.drpa-post-modal__action { display: flex !important; align-items: center !important; gap: 9px !important; padding: 10px !important; border: 1px solid rgba(var(--bs-border-color, 235, 237, 242), 1) !important; border-radius: 4px !important; cursor: pointer !important; }
+.drpa-post-modal__action input { accent-color: rgb(var(--bs-secondary, 79, 70, 229)) !important; }
+.drpa-post-modal__message { min-height: 20px !important; margin: 14px 0 8px !important; color: rgba(var(--bs-gray-700, 55, 65, 81), 1) !important; }
+.drpa-post-modal__run { width: 100% !important; padding: 10px 14px !important; border: 0 !important; border-radius: 4px !important; background: rgba(var(--bs-primary, 12, 20, 39), 1) !important; color: #fff !important; cursor: pointer !important; font: 600 14px/1.2 "Segoe UI", Arial, sans-serif !important; }
+.drpa-post-modal__run:hover:not(:disabled) { background: rgba(var(--bs-secondary, 79, 70, 229), 1) !important; }
+.drpa-post-modal__run:disabled { cursor: wait !important; opacity: .65 !important; }

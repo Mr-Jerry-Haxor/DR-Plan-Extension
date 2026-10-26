@@ -4,6 +4,7 @@
   const extensionApi = globalThis.browser || globalThis.chrome;
   const CONTAINER_SELECTOR = '[id^="formentrycontainer1500_ENTITY_"]';
   const BUTTON_CLASS = "drpa-post-action";
+  const MODAL_ID = "drpa-post-process-modal";
   const SIDEBAR_ITEM_ID = "drpa-erps-sidebar-item";
   const EMBEDDED_PANEL_ID = "drpa-erps-embedded-panel";
   const cache = new Map();
@@ -49,8 +50,10 @@
   }
 
   function actionHost(container) {
-    return container.querySelector("header.widgetHeader .pull-right.mobileEllipsisButtons") ||
+    const toolbarHost = container.querySelector("header.widgetHeader .pull-right.mobileEllipsisButtons") ||
       container.querySelector("header.widgetHeader") || container;
+    const reports = toolbarHost.querySelector("#reportSelectionArea")?.closest(".widget-toolbar");
+    return { toolbarHost, reports };
   }
 
   function currentPlanId() {
@@ -172,16 +175,87 @@
   }
 
   function removeAction(container) {
-    container.querySelectorAll(`.${BUTTON_CLASS}`).forEach(button => button.remove());
+    container.querySelectorAll(`.${BUTTON_CLASS}`).forEach(button => {
+      (button.closest(".drpa-post-action-host") || button).remove();
+    });
   }
 
-  async function openWorkflow(button, planId) {
+  function closePostModal() {
+    document.getElementById(MODAL_ID)?.remove();
+  }
+
+  async function openWorkflow(button, planId, status) {
     button.disabled = true;
     const original = button.querySelector(".drpa-post-action__label")?.textContent || "Complete Post-DR Process";
     const label = button.querySelector(".drpa-post-action__label");
-    if (label) label.textContent = "Opening DR Plugin…";
+    if (label) label.textContent = "Preparing…";
     await captureInitiator();
-    openEmbeddedPanel(planId, "automation");
+    closePostModal();
+    const overlay = document.createElement("div");
+    overlay.id = MODAL_ID;
+    overlay.className = "drpa-post-modal";
+    const dialog = document.createElement("section");
+    dialog.className = "drpa-post-modal__dialog";
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    dialog.setAttribute("aria-label", "Complete Post-DR Process");
+    const header = document.createElement("header");
+    header.className = "drpa-post-modal__header";
+    const title = document.createElement("h2");
+    title.textContent = "Complete Post-DR Process";
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "drpa-post-modal__close";
+    close.textContent = "×";
+    close.setAttribute("aria-label", "Close post-DR process dialog");
+    close.addEventListener("click", closePostModal);
+    header.append(title, close);
+    const description = document.createElement("p");
+    description.className = "drpa-post-modal__copy";
+    description.textContent = `Approved date: ${status.approvalDate}. Select the required post-DR records to create.`;
+    const actionList = document.createElement("div");
+    actionList.className = "drpa-post-modal__actions";
+    for (const action of status.actions) {
+      const row = document.createElement("label");
+      row.className = "drpa-post-modal__action";
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = true;
+      input.value = action.key;
+      const text = document.createElement("span");
+      text.textContent = `${action.applicationName} — ${action.type}`;
+      row.append(input, text);
+      actionList.append(row);
+    }
+    const message = document.createElement("p");
+    message.className = "drpa-post-modal__message";
+    const run = document.createElement("button");
+    run.type = "button";
+    run.className = "drpa-post-modal__run";
+    run.textContent = "Run Selected Process";
+    run.addEventListener("click", async () => {
+      const selectedKeys = [...actionList.querySelectorAll("input:checked")].map(input => input.value);
+      if (!selectedKeys.length) {
+        message.textContent = "Select at least one post-DR action.";
+        return;
+      }
+      run.disabled = true;
+      message.textContent = "Processing selected post-DR actions…";
+      try {
+        const response = await request("RUN_POST_APPROVAL_PROCESS", { planId, selectedKeys });
+        if (!response?.ok) throw new Error(response?.error?.message || "Post-DR processing failed.");
+        message.textContent = `${response.data.created.length} record(s) created; ${response.data.skipped.length} duplicate(s) skipped.`;
+        cache.delete(planId);
+        globalThis.setTimeout(() => { closePostModal(); scan(true); }, 900);
+      } catch (error) {
+        message.textContent = `${error.message} Verify ERPS before retrying.`;
+        run.disabled = false;
+      }
+    });
+    dialog.append(header, description, actionList, message, run);
+    overlay.append(dialog);
+    overlay.addEventListener("click", event => { if (event.target === overlay) closePostModal(); });
+    document.body.append(overlay);
     globalThis.setTimeout(() => {
       button.disabled = false;
       if (button.isConnected && label) label.textContent = original;
@@ -189,9 +263,11 @@
   }
 
   function createAction(status, planId) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "widget-toolbar floatLeftForButtonOrder drpa-post-action-host";
     const button = document.createElement("button");
     button.type = "button";
-    button.className = BUTTON_CLASS;
+    button.className = `${BUTTON_CLASS} btn btn-xs btn-outline-secondary`;
     button.dataset.planId = String(planId);
     button.title = `Open the DR Plan extension to complete ${status.missing.length} missing post-approval requirement(s).`;
     const icon = document.createElement("span");
@@ -205,8 +281,9 @@
     count.className = "drpa-post-action__count";
     count.textContent = String(status.missing.length);
     button.append(icon, label, count);
-    button.addEventListener("click", () => openWorkflow(button, planId));
-    return button;
+    button.addEventListener("click", () => openWorkflow(button, planId, status));
+    wrapper.append(button);
+    return wrapper;
   }
 
   async function evaluateContainer(container, force = false) {
@@ -224,7 +301,9 @@
         existing.title = `Open the DR Plan extension to complete ${status.missing.length} missing post-approval requirement(s).`;
         return;
       }
-      actionHost(container).append(createAction(status, planId));
+      const target = actionHost(container);
+      const action = createAction(status, planId);
+      target.toolbarHost.insertBefore(action, target.reports || null);
     } catch {
       removeAction(container);
     }

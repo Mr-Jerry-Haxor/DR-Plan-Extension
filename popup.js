@@ -4,6 +4,10 @@ import { buildPostApprovalItems, defaultPostApprovalDate, validateCreationItem }
 const extensionApi = globalThis.browser || globalThis.chrome;
 const state = {
   plans: [],
+  planCatalogMeta: { total: 0, pagesFetched: 0, truncated: false },
+  planPage: 1,
+  planPageSize: 100,
+  visiblePlans: [],
   filteredPlans: [],
   selectedPlanIds: new Set(),
   selectedPlanId: null,
@@ -89,7 +93,12 @@ function setBusy(busy, message = "Working…") {
   $("busyMessage").textContent = message;
   $("busyOverlay").classList.toggle("hidden", !busy);
   document.querySelectorAll("button").forEach(button => { button.disabled = busy || button.dataset.baseDisabled === "true"; });
-  if (!busy) $("validateBtn").disabled = state.selectedPlanIds.size === 0;
+  if (!busy) {
+    $("validateBtn").disabled = state.selectedPlanIds.size === 0;
+    const pageCount = Math.max(1, Math.ceil(state.filteredPlans.length / state.planPageSize));
+    $("previousPlanPageBtn").disabled = state.planPage <= 1;
+    $("nextPlanPageBtn").disabled = state.planPage >= pageCount;
+  }
 }
 
 function setMessage(element, message, type = "") {
@@ -156,9 +165,13 @@ function updateSelectionState() {
 
 function renderPlans() {
   state.filteredPlans = filteredPlans();
+  const pageCount = Math.max(1, Math.ceil(state.filteredPlans.length / state.planPageSize));
+  state.planPage = Math.min(Math.max(1, state.planPage), pageCount);
+  const offset = (state.planPage - 1) * state.planPageSize;
+  state.visiblePlans = state.filteredPlans.slice(offset, offset + state.planPageSize);
   const list = $("planList");
   list.replaceChildren();
-  for (const plan of state.filteredPlans) {
+  for (const plan of state.visiblePlans) {
     const input = node("input", { type: "checkbox", value: String(plan.id), checked: state.selectedPlanIds.has(plan.id) });
     input.addEventListener("change", () => {
       if (input.checked) state.selectedPlanIds.add(plan.id);
@@ -187,7 +200,11 @@ function renderPlans() {
     list.append(label);
   }
   if (!state.filteredPlans.length) list.append(node("p", { className: "message", text: "No DR Plans match the active filters." }));
-  $("planCount").textContent = `${state.filteredPlans.length} of ${state.plans.length} accessible plan(s) shown.`;
+  const pagination = state.planCatalogMeta.pagesFetched ? ` Loaded in ${state.planCatalogMeta.pagesFetched} request page(s).` : "";
+  $("planCount").textContent = `${state.filteredPlans.length} of ${state.plans.length} accessible plan(s) match filters.${pagination}`;
+  $("planPageLabel").textContent = `Page ${state.planPage} of ${pageCount}`;
+  $("previousPlanPageBtn").disabled = state.planPage <= 1;
+  $("nextPlanPageBtn").disabled = state.planPage >= pageCount;
   updateSelectionState();
 }
 
@@ -197,6 +214,7 @@ async function loadPlans(force = false) {
   try {
     const result = await request("LIST_PLANS", { search: "" });
     state.plans = result.rows;
+    state.planCatalogMeta = { total: result.total, pagesFetched: result.pagesFetched, truncated: result.truncated };
     populateOrganizationFilter();
     renderPlans();
     if (result.truncated) setMessage($("sessionMessage"), `${result.rows.length} of ${result.total} plans loaded.`, "error");
@@ -403,25 +421,28 @@ async function createSelected() {
 
 $("checkSessionBtn").addEventListener("click", checkSession);
 $("refreshPlansBtn").addEventListener("click", () => loadPlans(true));
-$("searchForm").addEventListener("submit", event => { event.preventDefault(); renderPlans(); });
-$("planSearch").addEventListener("input", renderPlans);
-$("planStatusFilter").addEventListener("change", renderPlans);
-$("organizationFilter").addEventListener("change", renderPlans);
-$("approvalFromDate").addEventListener("change", renderPlans);
-$("approvalToDate").addEventListener("change", renderPlans);
+function applyPlanFilters() { state.planPage = 1; renderPlans(); }
+$("searchForm").addEventListener("submit", event => { event.preventDefault(); applyPlanFilters(); });
+$("planSearch").addEventListener("input", applyPlanFilters);
+$("planStatusFilter").addEventListener("change", applyPlanFilters);
+$("organizationFilter").addEventListener("change", applyPlanFilters);
+$("approvalFromDate").addEventListener("change", applyPlanFilters);
+$("approvalToDate").addEventListener("change", applyPlanFilters);
 $("clearPlanFiltersBtn").addEventListener("click", () => {
   $("planSearch").value = "";
   $("planStatusFilter").value = "";
   $("organizationFilter").value = "";
   $("approvalFromDate").value = "";
   $("approvalToDate").value = "";
-  renderPlans();
+  applyPlanFilters();
 });
 $("selectVisiblePlansBtn").addEventListener("click", () => {
-  state.filteredPlans.forEach(plan => state.selectedPlanIds.add(plan.id));
+  state.visiblePlans.forEach(plan => state.selectedPlanIds.add(plan.id));
   state.selectedPlanId = state.selectedPlanIds.size === 1 ? [...state.selectedPlanIds][0] : null;
   renderPlans();
 });
+$("previousPlanPageBtn").addEventListener("click", () => { state.planPage -= 1; renderPlans(); });
+$("nextPlanPageBtn").addEventListener("click", () => { state.planPage += 1; renderPlans(); });
 $("clearPlanSelectionBtn").addEventListener("click", () => {
   state.selectedPlanIds.clear();
   state.selectedPlanId = null;
